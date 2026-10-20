@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 2
+  tags:
+  - physical_surface
+  - hand_surface
+  - virtual_surface
+  - physical_right_hand
+  - physical_left_hand
+  - hand_virtual_object
+  - virtual_object
+  - virtual_window
+  - virtual_surface_mask
+  - webview
+  - text_object
+  - image_object
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - SurfaceHandLayer
+  - SurfaceLayer
+  - VirtualObjectLayer
+  - VirtualWindowLayer
+  - HandSurfaceVirtualObjectLayer
+  - VirtualSurfaceLayer
+  - VirtualSurfaceMaskLayer
+  - WebviewLayer
+  - TextObjectLayer
+  - ImageObjectLayer
+  - WebViewCanvasLayer
+  - VirtualSurfaceFORLayer
+  - VirtualSurfaceSpaceLayer
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0

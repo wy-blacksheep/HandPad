@@ -1,0 +1,79 @@
+[
+    {
+      "Type": "Text",
+      "value": "sign your initials and symbols here.",
+      "size": 30,
+      "x": 0.05,
+      "y": 0.17,
+      "textColor": "#4169E1"
+    },
+    {
+        "Type": "CanvasProps",
+        "backgroundColor": "#FFFFFF",
+        "signX": 0.05,
+        "signY": 0.2,
+        "signWidth": 600,
+        "signHeight": 200,
+        "signBG": "rgba(255, 255, 255, 0.5)",
+        "signColor": "#4169E1",
+        "signThickness": 4
+    },
+    {
+      "Type": "Rectangle",
+      "x": 0.8,
+      "y": 0.2,
+      "rotation": 0,
+      "width": 100,
+      "height": 100,
+      "strokeColor": "#FF3215" 
+    },
+    {
+      "Type": "Rectangle",
+      "x": 0.1,
+      "y": 0.65,
+      "rotation": 0,
+      "width": 300,
+      "height": 200
+    },
+    {
+      "Type": "Image",
+      "ImageSRC": "https://png.pngtree.com/png-vector/20190629/ourmid/pngtree-lightning-button-icon-design-png-image_1518954.jpg",
+      "x": 0.7,
+      "y": 0.05,
+      "rotation": 0,
+      "width": 100,
+      "height": 100
+    },
+    {
+        "Type": "Text",
+        "value": "First National Park in the World",
+        "size": 40,
+        "x": 0.2,
+        "y": 0.1
+    },
+    {
+        "Type": "Text",
+        "value": "Copy the statement text here.",
+        "size": 30,
+        "x": 0.1,
+        "y": 0.6
+    },
+    {
+        "Type": "Rectangle",
+        "x": 0.7,
+        "y": 0.5,
+        "rotation": -60,
+        "width": 200,
+        "height": 300,
+        "strokeColor": "#FF3215" 
+    },
+    {
+        "Type": "Text",
+        "value": "Copy one map and \n one animal photo here.",
+        "size": 24,
+        "rotation": -60,
+        "x": 0.75,
+        "y": 0.45,
+        "textColor": "#FF3215" 
+      }
+  ]

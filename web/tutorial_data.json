@@ -1,0 +1,96 @@
+[
+    {
+      "Type": "Text",
+      "value": "1. Snap the interaction window \n 2. Move hand freely",
+      "size": 25,
+      "x": 0.05,
+      "y": 0.1,
+      "textColor": "#0066CC"
+    },
+    {
+      "Type": "Rectangle",
+      "x": 0.05,
+      "y": 0.17,
+      "rotation": 0,
+      "width": 200,
+      "height": 150,
+      "strokeColor": "#0066CC" 
+    },  
+    {
+        "Type": "Text",
+        "value": "Tutorial of Snapping Gestures",
+        "size": 30,
+        "x": 0.35,
+        "y": 0.05
+    },
+    {
+        "Type": "Text",
+        "value": "6. Move the interaction window by pinching",
+        "size": 25,
+        "x": 0.08,
+        "y": 0.58,
+        "boundWidth": 0.3,
+        "textColor": "#FF9933"
+    },
+    {
+      "Type": "Rectangle",
+      "x": 0.1,
+      "y": 0.65,
+      "rotation": 0,
+      "width": 200,
+      "height": 150,
+      "strokeColor": "#FF9933"
+    },
+    {
+      "Type": "Text",
+      "value": "4. Resize the interaction window \n 5. Snap again \n 6. Touch on the surface",
+      "size": 25,
+      "x": 0.55,
+      "y": 0.38,
+      "textColor": "#9966CC"
+    },
+    {
+        "Type": "Rectangle",
+        "x": 0.55,
+        "y": 0.5,
+        "rotation": 0,
+        "width": 400,
+        "height": 300,
+        "strokeColor": "#9966CC" 
+    },
+    {
+      "Type": "Text",
+      "value": "3. Move the interaction window by semi-snap",
+      "size": 25,
+      "x": 0.63,
+      "y": 0.57,
+      "boundWidth": 0.3,
+      "textColor": "#00CC66"
+    },
+    {
+        "Type": "Rectangle",
+        "x": 0.65,
+        "y": 0.63,
+        "rotation": 0,
+        "width": 200,
+        "height": 150,
+        "strokeColor": "#00CC66" 
+    },
+    {
+      "Type": "Text",
+      "value": "8. Oversnap \n 9. Rotate the application window \n 10. Pinch to move the application window \n 11. Resize the application window",
+      "size": 25,
+      "x": 0.4,
+      "y": 0.15,
+      "textColor": "#CC0033" 
+    },
+    {
+      "Type": "Rectangle",
+      "x": 0.005,
+      "y": 0.005,
+      "rotation": 0,
+      "width": 1010,
+      "height": 670,
+      "strokeColor": "#CC0033" 
+  }
+]

@@ -1,0 +1,37 @@
+.popup {
+    display: none;
+    position: fixed;
+    top: 100px;
+    left: 100px;
+    z-index: 1000;
+    background-color: #00000088; /* white background */
+    border-radius: 6px; /* rounded corners */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* subtle shadow for depth */
+    padding: 8px; /* internal spacing */
+}
+
+.paste-button {
+    font-size: 18px; /* larger text */
+    padding: 10px 20px; /* button padding */
+    border: none;
+    background-color: #181818; /* bootstrap primary color */
+    color: #fff; /* white text */
+    border-radius: 3px; /* rounded corners for the button */
+    cursor: pointer; /* indicate clickable */
+}
+
+.paste-button:hover {
+    background-color: #0056b3; /* darker blue on hover */
+}
+
+.paste-button:disabled {
+    background-color: #D3D3D3; /* Light gray background */
+    color: #A9A9A9; /* Dim text color */
+    cursor: not-allowed; /* Indicate not clickable */
+}
+
+/* If you want to have a different hover effect on disabled button */
+.paste-button:disabled:hover {
+    background-color: #D3D3D3; /* Keep the same background color */
+    color: #A9A9A9; /* Keep the same text color */
+}

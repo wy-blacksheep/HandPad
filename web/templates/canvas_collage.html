@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="/handpad_bridge.js"></script>
+    <title>Collage</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .popup {
+            display: none;
+            position: fixed;
+            top: 100px;
+            left: 100px;
+            z-index: 1000;
+            background-color: #00000088; 
+            border-radius: 6px; 
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); 
+            padding: 8px; 
+        }
+
+        .paste-button {
+            font-size: 18px; 
+            padding: 10px 20px; 
+            border: none;
+            background-color: #181818; 
+            color: #fff;
+            border-radius: 3px;
+            cursor: pointer; 
+        }
+
+        .paste-button:hover {
+            background-color: #0056b3; 
+        }
+
+        .paste-button:disabled {
+            background-color: #D3D3D3; 
+            color: #A9A9A9; 
+            cursor: not-allowed;
+        }
+
+        .paste-button:disabled:hover {
+            background-color: #D3D3D3;
+            color: #A9A9A9;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        let activeStickers = {};
+        let stickerImages = {};
+        let draggingId = null;
+        let maxZIndex = 0;
+        let activeStickerCount = 0;
+
+        let trashIconX = 400;  // x position of the center of the trash icon
+        let trashIconY = 800;  // y position of the center of the trash icon
+        let trashIconWidth = 80;  // width of the trash icon
+        let trashIconHeight = 80;  // height of the trash icon
+        let hoverTrash = false;  // Indicates whether the sticker is hovering over the trash
+
+        let prev_mouseX = -1;
+        let prev_mouseY = -1;
+
+        let isPaste = false;
+        
+        let trashOpenIcon, trashIcon;
+        function preload() {
+            trashIcon = loadImage('/assets/trash.svg');
+            trashOpenIcon = loadImage('/assets/trash-open.svg');
+            font = 'Arial'; // Use the system font; no proprietary font is bundled.
+        }
+        
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            trashIconX = (width - trashIconWidth) / 2;
+            trashIconY = (windowHeight - trashIconHeight - 20);
+            textFont(font);
+
+            angleMode(DEGREES);
+            loadCanvasData();
+        }
+
+        function draw() {
+            cursorX = mouseX;
+            cursorY = mouseY;
+
+            background(canvasProps.backgroundColor || '#fff'); // Canvas background
+            drawItems();
+            
+            let sortedStickers = Object.entries(activeStickers).sort((a, b) => a[1].zIndex - b[1].zIndex);
+            
+            for (const [id, sticker] of sortedStickers) {
+                push();
+                translate(sticker.x, sticker.y);
+                rotate(sticker.rotation);
+                        
+                if (id.includes("_IMG_")) {
+                    let img = stickerImages[id];
+                    if (img) {
+                        image(img, 0, 0, sticker.width, sticker.height);
+                    }
+                }
+                else {
+                    noStroke();
+                    textSize(sticker.size); // set text size
+                    fill(sticker.textColor || '#000'); // set text color
+                    textAlign(LEFT); // align text to center
+                    sticker.boundWidth = 0.25;
+                    // split text so it fits within the bounding box
+                    let words = sticker.value.split(' ');
+                    let line = '';
+                    let yOffset = 0;
+                    let lines = []
+                    for (const word of words) {
+                        let testLine = line + word + ' ';
+                        let testWidth = textWidth(testLine);
+                        if (testWidth > sticker.boundWidth * width && line.length > 0) {
+                            text(line, 0, yOffset);
+                            line = word + ' ';
+                            yOffset += textSize(); // or another value depending on desired line spacing
+                        } else {
+                            line = testLine;
+                        }
+                        lines.push(line);
+                    }
+                    lines.push(line);
+                    sticker.adjustedValue = lines.join('\n');
+                    sticker.adjustedHeight = yOffset + textSize();
+                    text(line, 0, yOffset); // Draw the last line
+                }
+                pop();
+            }
+
+            hoverTrash = isStickerOverTrash(draggingId);
+  
+            // Change icon if sticker is hovering over the trash
+            stroke(0);
+            strokeWeight(5);
+            fill(255);
+            circle(trashIconX + trashIconWidth / 2, trashIconY + 5 + trashIconHeight / 2, trashIconWidth + 20);
+            if (hoverTrash) {
+                image(trashOpenIcon, trashIconX, trashIconY, trashIconWidth, trashIconHeight);
+            } else {
+                image(trashIcon, trashIconX, trashIconY, trashIconWidth, trashIconHeight);
+            }
+
+            renderDragItem();
+        }
+
+        function isStickerOverTrash(id) {
+            if (id && draggingId) {
+                // Check if something is being dragged
+                let sticker = activeStickers[id];
+                
+                // Check if the mouse is within the bounds of the trash icon
+                let withinXBounds = mouseX >= trashIconX && mouseX <= (trashIconX + trashIconWidth);
+                let withinYBounds = mouseY >= trashIconY && mouseY <= (trashIconY + trashIconHeight);
+                
+                if (withinXBounds && withinYBounds) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function mousePressed() {
+            if(mouseX <= 0 || mouseY <= 0) return
+
+            let clickedStickers = [];
+            
+            for (const [id, sticker] of Object.entries(activeStickers)) {
+                let img = stickerImages[id];
+                
+                if (img) {
+                    if (id.includes("_TXT_")) {
+                        let bounding_box = font.textBounds(sticker.adjustedValue, sticker.x, sticker.y, sticker.size);
+                        bounding_box.h = sticker.adjustedHeight;
+                        idW = bounding_box.w;
+                        idH = bounding_box.h;
+                        idX = bounding_box.x;
+                        idY = bounding_box.y;
+                    }
+                    else if (id.includes("_IMG_")) {
+                        idX = sticker.x;
+                        idY = sticker.y;
+                        idW = sticker.width;
+                        idH = sticker.height;
+                    }
+                    // Translate mouse coordinates to object's local coordinate system
+                    let localMouseX = mouseX - idX;
+                    let localMouseY = mouseY - idY;
+                    
+                    // Rotate mouse coordinates in opposite direction of object rotation to align them
+                    let rotatedMouseX = cos(-sticker.rotation) * localMouseX - sin(-sticker.rotation) * localMouseY;
+                    let rotatedMouseY = sin(-sticker.rotation) * localMouseX + cos(-sticker.rotation) * localMouseY;
+                    
+                    // Perform hit test in object's local coordinate system
+                    if (rotatedMouseX >= 0 && rotatedMouseX <= idW &&
+                        rotatedMouseY >= 0 && rotatedMouseY <= idH) {
+                        clickedStickers.push({ id: id, zIndex: sticker.zIndex });
+                        
+                        
+                        
+                        // Store offsets for smooth dragging
+                        sticker.dx = rotatedMouseX;
+                        if (id.includes("_TXT_")) sticker.dy = rotatedMouseY - textSize() / 2;
+                        else sticker.dy = rotatedMouseY;
+                    }
+                    
+                }
+            }
+            
+            if (clickedStickers.length > 0) {
+                clickedStickers.sort((a, b) => b.zIndex - a.zIndex);
+                draggingId = clickedStickers[0].id;
+                
+                // Bring clicked sticker to top
+                maxZIndex++;
+                activeStickers[draggingId].zIndex = maxZIndex;
+            }
+
+            // Signature Logic
+            if (isWithinSigningBounds && !draggingId) {
+                isDrawing = true;
+                if(mouseX > 0 && mouseY > 0){
+                    currentStroke = [{ x: mouseX, y: mouseY }];
+                }
+            }
+
+            
+
+
+
+
+
+        }
+
+        function mouseReleased() {
+            prev_mouseX = -1;
+            prev_mouseY = -1;
+
+            if (hoverTrash && draggingId) {
+                delete activeStickers[draggingId];
+                draggingId = null;
+            }
+            draggingId = null;
+
+            // Signature Logic
+            if (isDrawing && currentStroke.length > 0) {
+                strokes.push(currentStroke);
+                currentStroke = [];
+            }
+            
+            isDrawing = false;
+        }
+
+        function mouseDragged() {
+            //if(mouseX <= 0 || mouseY <= 0) return
+
+            // Signature Logic
+            
+
+
+
+
+
+            if (isDrawing && isWithinSigningBounds() && !draggingId) {
+                
+                currentStroke.push({ x: mouseX, y: mouseY });
+                
+            }else{
+                
+                if (draggingId) {            
+                    let sticker = activeStickers[draggingId];
+                    
+                    // Calculate the distance moved by the mouse in global coordinate system
+                    /*let deltaX = mouseX - sticker.x;
+                    let deltaY = mouseY - sticker.y;
+                    
+                    // Convert to local coordinates considering rotation
+                    let rotatedDeltaX = cos(sticker.rotation) * deltaX - sin(sticker.rotation) * deltaY;
+                    let rotatedDeltaY = sin(sticker.rotation) * deltaX + cos(sticker.rotation) * deltaY;
+                    
+                    // Update the sticker's position using the stored offsets and the rotated distance moved
+                    sticker.x = mouseX - (sticker.dx * cos(sticker.rotation) - sticker.dy * sin(sticker.rotation));
+                    sticker.y = mouseY - (sticker.dx * sin(sticker.rotation) + sticker.dy * cos(sticker.rotation));
+
+                    //console.log("sticker pos: "+sticker.x+","+sticker.y);*/
+
+                    if(prev_mouseX != -1 && prev_mouseY != -1){
+                        let offsetX = mouseX - prev_mouseX;
+                        let offsetY = mouseY - prev_mouseY;
+                        sticker.x += offsetX;
+                        sticker.y += offsetY;
+                    }
+
+                }
+
+                if (draggingId) {
+                    isTrashOpen = mouseX >= (width - 50) / 2 && mouseX <= ((width - 50) / 2) + 50 &&
+                                mouseY >= height - 100 && mouseY <= height - 50;
+                }
+
+                
+
+            }
+        }
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function rotateImage(id, delta) {
+            let sticker = activeStickers[id];
+
+            if (id.includes("_TXT_")) {
+                delta *= 2;
+            }
+
+            let angleDelta = radians(delta * 1);
+
+            // Translate mouse coordinates to object's local coordinate system
+            let localMouseX = mouseX - sticker.x;
+            let localMouseY = mouseY - sticker.y;
+
+            // Rotate mouse coordinates in opposite direction of object rotation to align them
+            let rotatedMouseX = cos(-sticker.rotation) * localMouseX - sin(-sticker.rotation) * localMouseY;
+            let rotatedMouseY = sin(-sticker.rotation) * localMouseX + cos(-sticker.rotation) * localMouseY;
+
+            // Calculate new rotated coordinates for the mouse position
+            let newRotatedMouseX = cos(angleDelta) * rotatedMouseX - sin(angleDelta) * rotatedMouseY;
+            let newRotatedMouseY = sin(angleDelta) * rotatedMouseX + cos(angleDelta) * rotatedMouseY;
+
+            // Convert the new rotated coordinates back to the global coordinate system
+            let newGlobalMouseX = cos(sticker.rotation) * newRotatedMouseX - sin(sticker.rotation) * newRotatedMouseY + sticker.x;
+            let newGlobalMouseY = sin(sticker.rotation) * newRotatedMouseX + cos(sticker.rotation) * newRotatedMouseY + sticker.y;
+
+            // Update sticker position
+            sticker.x += mouseX - newGlobalMouseX;
+            sticker.y += mouseY - newGlobalMouseY;
+
+            // Update the rotation
+            sticker.rotation += angleDelta;
+        }
+
+
+        function scaleImage(id, delta) {
+            if (id.includes("_TXT_")) {
+                // Scale text
+                //delta *= 2;
+
+                let sticker = activeStickers[id];
+                let scaleFactor = 1 - (delta * 0.001);
+                sticker.size *= scaleFactor;
+                //sticker.size += delta;             
+            } else {
+                let sticker = activeStickers[id];
+                let scaleFactor = 1 - (delta * 0.001);
+
+                // Translate mouse coordinates to object's local coordinate system
+                let localMouseX = mouseX - sticker.x;
+                let localMouseY = mouseY - sticker.y;
+
+                // Rotate mouse coordinates in opposite direction of object rotation to align them
+                let rotatedMouseX = cos(-sticker.rotation) * localMouseX - sin(-sticker.rotation) * localMouseY;
+                let rotatedMouseY = sin(-sticker.rotation) * localMouseX + cos(-sticker.rotation) * localMouseY;
+
+                // Calculate new scaled coordinates for the mouse position
+                let newScaledMouseX = rotatedMouseX * scaleFactor;
+                let newScaledMouseY = rotatedMouseY * scaleFactor;
+
+                // Convert the new scaled coordinates back to the global coordinate system
+                let newGlobalMouseX = cos(sticker.rotation) * newScaledMouseX - sin(sticker.rotation) * newScaledMouseY + sticker.x;
+                let newGlobalMouseY = sin(sticker.rotation) * newScaledMouseX + cos(sticker.rotation) * newScaledMouseY + sticker.y;
+
+                // Update sticker position
+                sticker.x += mouseX - newGlobalMouseX;
+                sticker.y += mouseY - newGlobalMouseY;
+
+                // Update the dimensions
+                sticker.width *= scaleFactor;
+                sticker.height *= scaleFactor;
+
+                
+            }
+        }
+
+        function scaleTextBounds(id, delta) {
+            if (id.includes("_TXT_")) {
+                // Scale text
+                let sticker = activeStickers[id];
+                let scaleFactor = 1 - (delta * 0.001);
+                sticker.boundWidth *= scaleFactor;
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+
+
+
+
+
+
+        let canvasData = [];
+        let canvasProps = {};
+        let cursorX = 0;
+        let cursorY = 0;
+        let additionalObjects = [];
+        let isDrawing = false; // New flag for drawing
+
+        function drawDashedLine(x1, y1, x2, y2, dashLength) {
+            const distance = dist(x1, y1, x2, y2);
+            const numDashes = floor(distance / dashLength);
+            for (let i = 0; i < numDashes; i++) {
+                const xStart = lerp(x1, x2, i / numDashes);
+                const yStart = lerp(y1, y2, i / numDashes);
+                const xEnd = lerp(x1, x2, (i + 0.5) / numDashes);
+                const yEnd = lerp(y1, y2, (i + 0.5) / numDashes);
+                line(xStart, yStart, xEnd, yEnd);
+            }
+        }
+
+        async function loadCanvasData() {
+            try {
+                const response = await fetch("/api/canvas_data");
+                if (response.ok) {
+                    canvasData = await response.json();
+                    for (const item of canvasData) {
+                        if (item.Type === "CanvasProps") {
+                            canvasProps = item;
+                            break;
+                        }
+                    }
+                } else {
+                    console.error("Failed to fetch canvas data");
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        let strokes = [];
+        let currentStroke = [];
+        let imageCache = {}; // to cache loaded images
+
+        function drawItems() {
+
+            for (const item of canvasData) {
+                if (item.Type === "Rectangle") {
+                    const x = item.x * width;
+                    const y = item.y * height;
+                    const cx = x + item.width / 2;
+                    const cy = y + item.height / 2;
+                    stroke(item.strokeColor || "#000");
+                    strokeWeight(4);
+                    noFill();
+                    push();
+                    translate(cx, cy);
+                    rotate(item.rotation);
+
+                    // Draw dashed lines for the rectangle
+                    drawDashedLine(-item.width / 2, -item.height / 2, item.width / 2, -item.height / 2, 20);
+                    drawDashedLine(item.width / 2, -item.height / 2, item.width / 2, item.height / 2, 20);
+                    drawDashedLine(item.width / 2, item.height / 2, -item.width / 2, item.height / 2, 20);
+                    drawDashedLine(-item.width / 2, item.height / 2, -item.width / 2, -item.height / 2, 20);
+
+                    pop();
+                } else if (item.Type === "Image") {
+                    const x = item.x * width;
+                    const y = item.y * height;
+                    let img = imageCache[item.ImageSRC];
+                    if (img) {
+                        image(img, x, y, item.width, item.height);
+                    }
+                    else {
+                        loadImage(item.ImageSRC, (loadedImg) => {
+                            imageCache[item.ImageSRC] = loadedImg; // store the loaded image in the cache
+                            image(loadedImg, x, y, item.width, item.height); // draw the loaded image
+                        });
+                    }
+                } else if (item.Type === "Text") {
+                    const x = item.x * width;
+                    const y = item.y * height;
+                    noStroke();
+                    fill(item.textColor || "#000"); // Use given text color or default to black
+                    textSize(item.size);
+                    
+                    if(item.boundWidth && item.boundWidth) {
+                        const boundW = item.boundWidth * width; // Assuming boundWidth is relative to canvas width
+                        const words = item.value.split(' ');
+                        let line = '';
+                        let yOffset = 0;
+                        for(const word of words) {
+                            const testLine = line + word + ' ';
+                            const testWidth = textWidth(testLine);
+                            if(testWidth > boundW && line.length > 0) {
+                                text(line, x, y + yOffset);
+                                line = word + ' ';
+                                yOffset += textSize(); // or another value depending on desired line spacing
+                            } else {
+                                line = testLine;
+                            }
+                        }
+                        text(line, x, y + yOffset); // Draw the last line
+                    } else {
+                        text(item.value, x, y);
+                    }
+                } else if (item.Type === "CanvasProps") {
+                    // Draw the signing rectangle
+                    const signX = item.signX * width;
+                    const signY = item.signY * height;
+                    const cx = signX + item.signWidth / 2;
+                    const cy = signY + item.signHeight / 2;
+                    stroke(item.signColor || '#000');
+                    strokeWeight(item.signThickness || 4);
+                    fill(item.signBG || 'rgba(255, 255, 255, 0.5)');
+                    push();
+                    translate(cx, cy);
+                    rotate(item.signRotation || 0);
+                    rect(-item.signWidth / 2, -item.signHeight / 2, item.signWidth, item.signHeight);
+                    pop();
+
+                    
+                    stroke(0);
+                    strokeWeight(4);
+                    noFill();
+                    for (const stroke of strokes) {
+                        beginShape();
+                        for (const point of stroke) {
+                            vertex(point.x, point.y);
+                        }
+                        endShape();
+                    }
+                
+                    // Also draw the currentStroke
+                    
+
+                    if(isDrawing && currentStroke.length > 0) {
+                        beginShape();
+                        for(const point of currentStroke) {
+                            vertex(point.x, point.y);
+                        }
+                        endShape();
+                    }
+                }
+            }
+        }
+
+
+        function isWithinSigningBounds() {
+            const signX = canvasProps.signX * width;
+            const signY = canvasProps.signY * height;
+            const signWidth = canvasProps.signWidth;
+            const signHeight = canvasProps.signHeight;
+
+            return mouseX >= signX && mouseX <= (signX + signWidth) &&
+                mouseY >= signY && mouseY <= (signY + signHeight);
+        }
+
+
+        function addObject(str) {
+            activeStickerCount++;
+            if (str.startsWith("IMGURL_")) {
+                const imgURL = str.replace("IMGURL_", "");
+                id = activeStickerCount + "_IMG_" + imgURL;
+                loadImage(imgURL, (img) => {
+                    imgWidth = 200;
+                    imgHeight = img.height * (imgWidth / img.width);
+                    const imageObject = {
+                        Type: "Image",
+                        ImageSRC: imgURL,
+                        img: img,
+                        x: mouseX,
+                        y: mouseY,
+                        zIndex: maxZIndex,
+                        width: imgWidth,
+                        height: imgHeight,
+                        rotation: 0,
+                        scale: 1
+                    };
+                    activeStickers[id] = imageObject;
+                    stickerImages[id] = img;
+                });
+            } else {
+                id = activeStickerCount + "_TXT_" + str;
+                const textObject = {
+                    Type: "Text",
+                    value: str,
+                    x: mouseX,
+                    y: mouseY,
+                    size: 16,
+                    zIndex: maxZIndex,
+                    textColor: "#000",
+                    boundWidth: '1',
+                    rotation: 0,
+                    scale: 1
+                };
+                activeStickers[id] = textObject;
+                stickerImages[id] = str;
+            }
+        }
+    
+        tempImage = {};
+        function renderDragItem() {
+            if (isDragging && dragContent !== "") {
+                str = dragContent;
+                if (str.startsWith("IMGURL_")) {
+                    const imgURL = str.replace("IMGURL_", "");
+
+                    
+
+                    id = "Temp_IMG_" + imgURL;
+                    // check if id is in tempImage
+                    if (tempImage[id]) {
+                        
+
+
+                        if(prev_mouseX != -1 && prev_mouseY != -1){ 
+                            image(tempImage[id].img, mouseX, mouseY, tempImage[id].width, tempImage[id].height);
+                        }
+                        return;
+                    } 
+                    else {
+                        loadImage(imgURL, (img) => {
+                            imgWidth = 200;
+                            imgHeight = img.height * (imgWidth / img.width);
+                            const imageObject = {
+                                Type: "Image",
+                                ImageSRC: imgURL,
+                                img: img,
+                                x: mouseX,
+                                y: mouseY,
+                                zIndex: maxZIndex,
+                                width: imgWidth,
+                                height: imgHeight,
+                                rotation: 0,
+                                scale: 1
+                            };
+                            tempImage[id] = imageObject;
+                        });
+                    }
+                } else {
+                    id = activeStickerCount + "_TXT_" + str;
+                    const textObject = {
+                        Type: "Text",
+                        value: str,
+                        x: mouseX,
+                        y: mouseY,
+                        size: 16,
+                        zIndex: maxZIndex,
+                        textColor: "#000",
+                        boundWidth: '1',
+                        rotation: 0,
+                        scale: 1
+                    };
+
+                    // draw this on the mouseposition
+                    noStroke();
+                    fill(textObject.textColor || "#000"); // Use given text color or default to black
+                    textSize(textObject.size);
+                    text(textObject.value, mouseX, mouseY);
+                }
+            }
+        }
+
+        function applyDraggedElement() {
+            if (!isDragging || dragContent === "") return;
+            
+
+            addObject(dragContent);
+            isDragging = false;
+            dragContent = "";
+            
+            fetch('/api/drag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ drag_content: "", is_dragging: false })  // Clear dragging status
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        
+                    } else {
+                        console.error('Failed to clear drag content:', data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to clear drag content:', err);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const popup = document.getElementById('paste-popup');
+            const pasteButton = document.getElementById('paste-button');
+
+            // |------------------------------------------------------
+            // | Control Functions
+            // |------------------------------------------------------
+
+            async function showContextMenu(x, y) {
+                clipboard = await getClipboardContent();
+                pasteButton.disabled = clipboard === "";
+                pasteButton.innerHTML = clipboard === "" ? "Clipboard Empty" : clipboard.startsWith("IMGURL_") ? "Paste Image" : "Paste Text";
+
+                popup.style.left = `${x}px`;
+                popup.style.top = `${y}px`;
+                popup.style.display = 'block';
+
+                isContextMenuVisible = true;
+            }
+
+            function hideContextMenu() {
+                popup.style.display = 'none';
+                isContextMenuVisible = false;
+            }
+
+
+            async function getClipboardContent() {
+                try {
+                    let response = await fetch('/api/clipboard', { method: 'GET' });
+                    let data = await response.json();
+                    
+                    return data.clipboard;
+                } catch(err) {
+                    console.error('Failed to read clipboard content:', err);
+                }
+            }
+
+            // event listener for the pasteButton
+            /*pasteButton.addEventListener('click', async function (event) {
+                if (isContextMenuVisible) {
+                    if (!popup.contains(event.target) && event.target !== popup) {
+                        hideContextMenu();
+                    }
+                    else {
+                        clipboard = await getClipboardContent();
+                        if (clipboard === "") return;
+                        addObject(clipboard);
+                        console.log(additionalObjects);
+                        hideContextMenu();
+                    }
+                }
+            });*/
+            
+            // C/Esc Key For Context Menu Visibility
+            /*document.addEventListener('keydown', function (event) {
+                if (event.key === 'c') showContextMenu(mouseX, mouseY);
+                if (event.key === 'Escape') hideContextMenu();
+                if (event.key === 'v') applyDraggedElement();
+            });*/
+
+            window.onHandPadMessage( function(message) {
+                
+				arrayOfMessage = message.data.split(",");
+				
+				data = {'x': parseFloat(arrayOfMessage[0]),'y': 1-parseFloat(arrayOfMessage[1]), 'rotation': parseFloat(arrayOfMessage[2]*20), 'scale': parseFloat(arrayOfMessage[3]*2000), 'drag': parseInt(arrayOfMessage[4]), 'paste': parseInt(arrayOfMessage[5])}
+				//testMSG = data.x + "," + data.y + "," + data.menu + "," + data.copy;
+				
+                if(data.drag == 1){
+                    if(data.x >= 0 && data.x <= 1 && data.y >= 0 && data.y <= 1){	
+                        prev_mouseX = mouseX;
+                        prev_mouseY = mouseY;
+
+                        mouseX = data.x * windowWidth;
+                        mouseY = data.y * windowHeight;
+
+                        mousePressed();
+                    }
+                }
+                //either paste or no touch
+				else if(data.paste == 1){
+                    if(data.x >= 0 && data.x <= 1 && data.y >= 0 && data.y <= 1){
+                        prev_mouseX = mouseX;
+                        prev_mouseY = mouseY;
+
+                        mouseX = data.x * windowWidth;
+                        mouseY = data.y * windowHeight;
+
+                        applyDraggedElement();
+                        mouseReleased();
+                    }
+				}
+                else if(data.x == -1 && data.y == -1 && data.rotation == 0 && data.scale == 0 && data.drag == 0 && data.paste == 0){
+                    mouseReleased();
+                }
+				else{
+                    if(data.x >= 0 && data.x <= 1 && data.y >= 0 && data.y <= 1){	
+                        prev_mouseX = mouseX;
+                        prev_mouseY = mouseY;
+
+                        mouseX = data.x * windowWidth;
+                        mouseY = data.y * windowHeight;
+
+                        //select content
+                        
+
+
+
+
+
+
+
+
+
+                        if (draggingId) {
+                            if(data.rotation == 0 && data.scale == 0){
+                                mouseDragged();
+                            }
+                            if(data.rotation != 0){
+                                rotateImage(draggingId, -data.rotation);
+                            }
+                            if(data.scale != 0){
+                                scaleImage(draggingId, -data.scale);
+                                //scaleTextBounds(draggingId, 500);
+                            }
+                        }
+                        else{
+                            //draw:
+                            
+                            mouseDragged();
+                        }
+                    }
+                }
+                //draw();
+			})
+        });
+
+        let isContextMenuVisible = false;
+
+        let isDragging = false;
+        let dragContent = "";
+        async function checkServerDragging() {
+            try {
+                const response = await fetch('/api/drag_status'); // Query the shared drag state.
+                const data = await response.json();
+                isDragging = data.is_dragging; // The response contains the boolean field is_dragging.
+                dragContent = data.drag_content;
+                
+            } catch (error) {
+                console.error('Failed to check server dragging status', error);
+            }
+        }
+        checkDragIntervalId = setInterval(checkServerDragging, 1000);
+
+    </script>
+  <div id="paste-popup" class="popup">
+      <button id="paste-button" class="paste-button">Paste</button>
+  </div>
+</body>
+</html>

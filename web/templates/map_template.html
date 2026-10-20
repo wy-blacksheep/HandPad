@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="/handpad_bridge.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <script>
+        class Pos {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+        }
+
+        const MAP_URL = 'https://upload.wikimedia.org/wikipedia/commons/d/d8/NPS_UnifiedRegionsMap2020.png';
+
+        function distance2D(pos1, pos2) {
+            return Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2));
+        }
+
+        function degreesToRadians(degrees) {
+            return degrees * (Math.PI / 180);
+        }
+
+        function pointInRotatedRectangle(point, rectPos, rectSize, rectAngleDegrees) {
+            let rectAngleRadians = degreesToRadians(rectAngleDegrees);
+
+            // Convert point coordinates to rectangle's local coordinate space
+            let translatedPoint = createVector(point.x - rectPos.x, point.y - rectPos.y);
+            let rotatedPoint = translatedPoint.copy().rotate(-rectAngleRadians);
+
+            // Check if the rotated point is within the bounds of the rotated rectangle
+            if (
+                rotatedPoint.x > -rectSize.x / 2 &&
+                rotatedPoint.x < rectSize.x / 2 &&
+                rotatedPoint.y > -rectSize.y / 2 &&
+                rotatedPoint.y < rectSize.y / 2
+            ) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        function pointInCircle(point, circlePos, circleRadius) {
+            let distance = distance2D(point, circlePos);
+            return distance <= circleRadius;
+        }
+
+        const sourcePositionX = 0.5;
+        const sourcePositionY = 0.5;
+        const sourcePos = new Pos(sourcePositionX, sourcePositionY);
+        const sourceWidth = 1000;
+        const sourceOrientation = 0;
+        let sourceAspectRatio = 1;
+
+        let debugMode = false;
+
+        let currentPos = new Pos(sourcePos.x, sourcePos.y);
+        let currentWidth = sourceWidth;
+        let currentOrientation = sourceOrientation;
+
+        let isDragMoving = false;
+        let isDragScaling = false;
+        let isDragRotating = false;
+        let moveOffset = new Pos(0, 0);
+        let scaleOffset = 0;
+        let rotateOffset = 0;
+
+        let dragInterfaceSize = 30;
+        let dragInterfaceStartPos = NaN;
+		
+		let pre_mouse_pos = new Pos(-1, -1);
+		
+		let testString = "not send";
+
+
+        let sourceImg;
+        function preload() {
+            sourceImg = loadImage(MAP_URL, () => {
+                sourceAspectRatio = sourceImg.height / sourceImg.width;
+            });
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }		
+
+        function draw() {
+            clear();
+			if(debugMode)
+				drawInfoWeb();
+            drawSource();
+        }
+		
+		function drawInfoWeb(){
+			textSize(20);
+            textAlign(LEFT, CENTER);
+            fill(0);
+
+            textStyle(NORMAL);
+			text("Position: " + parseFloat(currentPos.x).toFixed(3) + ", " + parseFloat(currentPos.y).toFixed(3), 10, 200);
+            text("Size: " + scaleOffset, 10, 300);
+			text("status: " + testString, 10, 400);
+		}
+		
+		function drawInfo(event) {
+            textSize(12);
+            textAlign(LEFT, CENTER);
+            fill(0);
+
+            textStyle(NORMAL);
+			text("Position: " + parseFloat(event.x).toFixed(3) + ", " + parseFloat(event.y).toFixed(3), 10, 300);
+            text("Size: " + event.scale, 10, 320);
+		}
+
+        function drawSource() {
+            push();
+            translate(currentPos.x * windowWidth, currentPos.y * windowHeight);
+            rotate(degreesToRadians(currentOrientation));
+            imageMode(CENTER);
+            image(sourceImg, 0, 0, currentWidth, currentWidth * sourceAspectRatio);
+            pop();
+
+            if (debugMode) {
+                push();
+                translate(currentPos.x * windowWidth, currentPos.y * windowHeight);
+                rotate(degreesToRadians(currentOrientation));
+                noFill();
+                stroke(0, 0, 0);
+                strokeWeight(2);
+                rectMode(CENTER);
+                rect(0, 0, currentWidth, currentWidth * sourceAspectRatio);
+                pop();
+            }
+        }
+
+        function pointInResizeInterface(point) {
+            let resizeInterfacePos = new Pos(currentPos.x * windowWidth + currentWidth/2 + dragInterfaceSize/2, currentPos.y * windowHeight - currentWidth/2 - dragInterfaceSize/2);
+            return pointInCircle(point, resizeInterfacePos, dragInterfaceSize/2);
+        }
+
+        function pointInRotateInterface(point) {
+            let rotateInterfacePos = new Pos(currentPos.x * windowWidth - currentWidth/2 - dragInterfaceSize/2, currentPos.y * windowHeight + currentWidth/2 + dragInterfaceSize/2);
+            return pointInCircle(point, rotateInterfacePos, dragInterfaceSize/2);
+        }
+
+        /*function mousePressed() {
+            if (pointInRotatedRectangle(new Pos(mouseX, mouseY), new Pos(currentPos.x * windowWidth, currentPos.y * windowHeight), new Pos(currentWidth, currentWidth), currentOrientation)) {
+                moveOffset.x = mouseX - (currentPos.x * windowWidth);
+                moveOffset.y = mouseY - (currentPos.y * windowHeight);
+                isDragMoving = true;
+            }
+            else if (pointInResizeInterface(new Pos(mouseX, mouseY))) {
+                dragInterfaceStartPos = new Pos(mouseX, mouseY);
+                scaleOffset = currentWidth;
+                isDragScaling = true;
+            }
+            else if (pointInRotateInterface(new Pos(mouseX, mouseY))) {
+                dragInterfaceStartPos = new Pos(mouseX, mouseY);
+                rotateOffset = currentOrientation;
+                isDragRotating = true;
+            }
+            return false;
+        }*/
+		
+		//for hand interaction in VR
+		function mousePressed(event) {
+            if (pointInRotatedRectangle(new Pos(event.x * windowWidth, event.y * windowHeight), new Pos(currentPos.x * windowWidth, currentPos.y * windowHeight), new Pos(currentWidth, currentWidth), currentOrientation)) {
+                moveOffset.x = event.x - currentPos.x;
+                moveOffset.y = event.y - currentPos.y;
+                isDragMoving = true;
+				testString = "moveOffset: " + moveOffset.x + "," + moveOffset.y;
+            }
+            else if (pointInResizeInterface(new Pos(event.x * windowWidth, event.y * windowHeight))) {
+                dragInterfaceStartPos = new Pos(event.x * windowWidth, event.y * windowHeight);
+                scaleOffset = currentWidth;
+                isDragScaling = true;
+            }
+            else if (pointInRotateInterface(new Pos(event.x * windowWidth, event.y * windowHeight))) {
+                dragInterfaceStartPos = new Pos(event.x * windowWidth, event.y * windowHeight);
+                rotateOffset = currentOrientation;
+                isDragRotating = true;
+            }
+            return false;
+        }
+
+        function mouseReleased() {
+            isDragMoving = false;
+            isDragScaling = false;
+            isDragRotating = false;
+            dragDelta = 0;
+        }
+
+        /*function mouseDragged() {
+            if (isDragMoving) {
+                currentPos.x = (mouseX - moveOffset.x) / windowWidth;
+                currentPos.y = (mouseY - moveOffset.y) / windowHeight;
+            } else if (isDragScaling) {
+                let dragDelta = distance2D(new Pos(pmouseX, pmouseY), new Pos(mouseX, mouseY)) / 10;
+                scaleSource(dragDelta);
+            } else if (isDragRotating) {
+
+            }
+        }*/
+		
+		//for hand interaction in VR
+		function mouseDragged(event) {
+            //if (!expStart || expEnd) return false;
+			
+			if (isDragMoving) {
+                currentPos.x = event.x - moveOffset.x;
+                currentPos.y = event.y - moveOffset.y;
+				testString = "currentPos: " + currentPos.x + "," + currentPos.y;
+            } else if (isDragScaling) {
+                //let dragDelta = distance2D(new Pos(pmouseX, pmouseY), new Pos(event.x, event.y)) / 10;
+                //scaleSource(dragDelta);
+            } else if (isDragRotating) {
+
+            }
+
+        }
+
+        
+
+
+
+
+
+		
+		//for hand interaction in VR
+		function mouseWheel(event) {
+            //if (!expStart || expEnd) return false;
+
+            scaleSource(event.scale*10000);
+
+            return false; 
+        }
+
+        function scaleSource(value) {
+            currentWidth -= value;
+            if (currentWidth < 1) currentWidth = 1;
+            else if (currentWidth >= 10000) currentWidth = 10000;
+        }
+
+        function rotateSource(value) {
+            currentOrientation += value;
+            if (currentOrientation < 0) currentOrientation += 360;
+            else if (currentOrientation >= 360) currentOrientation -= 360;
+        }
+
+        function handleScrollConstrain() { 
+            if (scrollValue > scrollLimit) {
+                let delta = scrollValue - scrollLimit;
+                scrollValue = scrollLimit;
+                imageY -= delta;
+            }
+            else if (scrollValue < -scrollLimit) {
+                let delta = scrollValue + scrollLimit;
+                scrollValue = -scrollLimit;
+                imageY -= delta;
+            }
+        }
+		
+		window.onHandPadMessage( function(message) {
+			testString = "send data";
+			arrayOfMessage = message.data.split(",");
+			data = {'x': float(arrayOfMessage[0]),'y': 1-float(arrayOfMessage[1]), 'rotation': float(arrayOfMessage[2]), 'scale': -float(arrayOfMessage[3])}
+			//data = {'scale': float(arrayOfMessage[3])}
+			//data = {'scale': float(message.data)}
+			testString = data.x + "," + data.y + "," + data.scale;
+			if(data.rotation == 0 && data.scale == 0){
+				if(data.x == -1 || data.y == -1){
+					mouseReleased();
+				}
+				if(data.x >= 0 && data.x <= 1 && data.y >= 0 && data.y <= 1){
+					if (!isDragMoving) {
+						mousePressed(data);
+					}
+					else{
+						mouseDragged(data);
+					}
+				}
+			}
+			else{
+				mouseWheel(data);
+			}
+		})
+    </script>
+</body>
+</html>

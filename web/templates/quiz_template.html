@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="/handpad_bridge.js"></script>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='quiz_style.css') }}">
+    <title>Quiz</title>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+			var windowWidth = window.innerWidth;
+			var windowHeight = window.innerHeight;
+	
+            const popup = document.getElementById('paste-popup');
+            const pasteButton = document.getElementById('paste-button');
+
+            // |------------------------------------------------------
+            // | Control Functions
+            // |------------------------------------------------------
+
+            async function showContextMenu(x, y) {
+                clipboard = await getClipboardContent();
+                pasteButton.disabled = clipboard === "";
+                pasteButton.innerHTML = clipboard === "" ? "Clipboard Empty" : clipboard.startsWith("IMGURL_") ? "Paste Image" : "Paste Text";
+
+                popup.style.left = `${x}px`;
+                popup.style.top = `${y}px`;
+                popup.style.display = 'block';
+
+                isContextMenuVisible = true;
+            }
+
+            function hideContextMenu() {
+                popup.style.display = 'none';
+                isContextMenuVisible = false;
+            }
+
+            async function getClipboardContent() {
+                try {
+                    let response = await fetch('/api/clipboard', { method: 'GET' });
+                    let data = await response.json();
+                    console.log('Clipboard Content:', data.clipboard);
+                    return data.clipboard;
+                } catch(err) {
+                    console.error('Failed to read clipboard content:', err);
+                }
+            }
+
+            async function pasteItem() {
+                let response = await fetch('/api/clipboard', { method: 'GET' });
+                let data = await response.json();
+                let clipboard = data.clipboard;
+                if (clipboard.startsWith("IMGURL_")) {
+                    let imageUrl = clipboard.split("IMGURL_")[1]; // Extract URL from clipboard content
+
+                    if (document.getElementById('placeholder-image')) {
+                        // replace #placeholder-image with the pasted image
+                        document.getElementById('placeholder-image').src = imageUrl;
+                    }
+                    else if (document.querySelector('textarea[name="answer"]')) {
+                        document.querySelector('textarea[name="answer"]').value = clipboard;
+                    }
+                }
+                else if (document.querySelector('textarea[name="answer"]')) {
+                    document.querySelector('textarea[name="answer"]').value = clipboard;
+                }
+                hideContextMenu();
+            }
+
+            // event listener for the pasteButton
+            /*pasteButton.addEventListener('click', async function (event) {
+                if (isContextMenuVisible) {
+                    if (!popup.contains(event.target) && event.target !== popup) {
+                        hideContextMenu();
+                    }
+                    else {
+                        // paste the clipboard content to the text box answer
+                        await pasteItem();
+                        hideContextMenu();
+                    }
+                }
+            });*/
+            
+            // C/Esc Key For Context Menu Visibility
+            /*document.addEventListener('keydown', function (event) {
+                if (event.key === 'c') showContextMenu(mouseX, mouseY);
+                if (event.key === 'Escape') hideContextMenu();
+                if (event.key === 'v') applyDraggedElement();
+            });*/
+            
+            mouseX = 0;
+            mouseY = 0;
+            /*document.addEventListener('mousemove', function (event) {
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            });*/
+		
+            function createDragElement(content, x, y) {
+                let element = document.createElement('div');
+                element.style.position = 'fixed';
+                element.style.opacity = '0.5';
+                element.style.pointerEvents = 'none';
+            
+                if (content.startsWith('IMGURL_')) {
+                    const imgURL = content.replace('IMGURL_', '');
+                    const img = document.createElement('img');
+                    img.src = imgURL;
+                    img.style.width = '200px';
+                    element.appendChild(img);
+                } else {
+                    element.innerHTML = content;
+                    element.style.whiteSpace = 'nowrap';
+                }
+            
+                element.style.left = `${x}px`;
+                element.style.top = `${y}px`;
+                document.body.appendChild(element);
+                draggedElementContent = content;
+                return element;
+            }
+
+            function updateDraggedElement(x, y) {
+                if (draggedElement != null) {
+                    draggedElement.style.left = `${x}px`;
+                    draggedElement.style.top = `${y}px`;
+                }
+            }
+
+            function removeDragElement() {
+                if (draggedElement != null) {
+                    draggedElement.remove();
+                    draggedElement = null;
+                }
+            }
+
+            function applyDraggedElement() {
+                if (!isDragging || draggedElement == null) return;
+
+                if (draggedElementContent.startsWith('IMGURL_')) {
+                    if (document.getElementById('placeholder-image')) {
+                        // replace #placeholder-image with the pasted image
+                        document.getElementById('placeholder-image').src = draggedElementContent.replace('IMGURL_', '');
+                    }
+                    else if (document.querySelector('textarea[name="answer"]')) {
+                        document.querySelector('textarea[name="answer"]').value = draggedElementContent;
+                    }
+                } else if (document.querySelector('textarea[name="answer"]')) {
+                    document.querySelector('textarea[name="answer"]').value = draggedElementContent;
+                }
+
+                removeDragElement();
+
+                fetch('/api/drag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ drag_content: "", is_dragging: false })  // Clear dragging status
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        console.log('Drag content cleared successfully');
+                    } else {
+                        console.error('Failed to clear drag content:', data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to clear drag content:', err);
+                });
+            }
+
+
+            checkDragIntervalId = setInterval(checkServerDragging, 1000);
+    
+            let isDragging = false;
+            let dragContent = "";
+            let draggedElement = null;
+            let draggedElementContent = "";
+            async function checkServerDragging() {
+                try {
+                    const response = await fetch('/api/drag_status'); // Query the shared drag state.
+                    const data = await response.json();
+                    isDragging = data.is_dragging; // The response contains the boolean field is_dragging.
+                    dragContent = data.drag_content;
+                    console.log('Server dragging status:', isDragging, dragContent);
+                } catch (error) {
+                    console.error('Failed to check server dragging status', error);
+                }
+            }
+            
+            // Event listener to update the position of the dragging element based on mouse position
+            /*document.addEventListener('mousemove', function (event) {
+                if (isDragging) {
+                    if (draggedElement == null) {
+                        draggedElement = createDragElement(dragContent, event.clientX, event.clientY);
+                    } else if (draggedElement != null && draggedElementContent != dragContent) {
+                        removeDragElement();
+                        draggedElement = createDragElement(dragContent, event.clientX, event.clientY);
+                    }
+                    else {
+                        updateDraggedElement(event.clientX, event.clientY);
+                    }
+                } else {
+                    if (draggedElement != null) {
+                        removeDragElement();
+                    }
+                }
+            });*/
+			
+			window.onHandPadMessage( function(message) {
+				arrayOfMessage = message.data.split(",");
+				
+				data = {'x': parseFloat(arrayOfMessage[0]),'y': 1-parseFloat(arrayOfMessage[1]), 'drag': parseInt(arrayOfMessage[2]), 'paste': parseInt(arrayOfMessage[3])}
+				//testMSG = data.x + "," + data.y + "," + data.menu + "," + data.copy;
+				
+				if(data.paste == 1){
+					applyDraggedElement();
+                    removeDragElement();
+				}
+				
+				if(data.x >= 0 && data.x <= 1 && data.y >= 0 && data.y <= 1){
+					
+					if (isDragging) {
+						if (draggedElement == null) {
+							draggedElement = createDragElement(dragContent, data.x * windowWidth, data.y * windowHeight);
+						} else if (draggedElement != null && draggedElementContent != dragContent) {
+							removeDragElement();
+							draggedElement = createDragElement(dragContent, data.x * windowWidth, data.y * windowHeight);
+						}
+						else {
+							updateDraggedElement(data.x * windowWidth, data.y * windowHeight);
+						}
+					} else {
+						if (draggedElement != null) {
+							removeDragElement();
+						}
+					}
+					mouseX = data.x * windowWidth;
+					mouseY = data.y * windowHeight;
+				}
+
+                if(data.paste == 1){
+					applyDraggedElement();
+                    removeDragElement();
+				}
+
+			})
+
+
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        {% if completed %}
+            <div class="quiz-completed">
+                <h1>Quiz Completed!</h1>
+                <form action="{{ url_for('quiz') }}" method="GET">
+                    <input type="submit" value="Reset Quiz">
+                </form>
+            </div>
+        {% else %}
+            <form class="question" method="post">
+                <h1>{{ question_data['Question'] }}</h1>
+
+                {% if question_data.get('QuestionDetails') %}
+                    <p>{{ question_data['QuestionDetails'] }}</p>
+                {% endif %}
+
+                {% if question_data['QuestionImage'] %}
+                    <img class="question-img" src="{{ question_data['QuestionImage'] }}" alt="Question Image">
+                {% endif %}
+
+                {% if question_data['Type'] == 'MCQ' %}
+                    <div class="mcq-options">
+                        {% for option in question_data['Options'] %}
+                            <label class="mcq-option">
+                                <input type="radio" name="answer" value="{{ option.text }}">
+                                {% if option.image %}
+                                    <img src="{{ option.image }}" alt="{{ option.text }}">
+                                {% endif %}
+                                {{ option.text }}
+                            </label>
+                        {% endfor %}
+                    </div>
+                {% elif question_data['Type'] == 'ImageText' %}
+                    <div class="imagetext-container">
+                        <img id="placeholder-image" src="{{ url_for('static', filename='placeholder.svg') }}" alt="Paste Image Here">
+                    </div>
+                {% else %}
+                    <textarea name="answer" rows="10" cols="50"></textarea>
+                {% endif %}
+
+                <input type="submit" value="Next">
+            </form>
+        {% endif %}
+    </div>
+    <div id="paste-popup" class="popup">
+        <button id="paste-button" class="paste-button">Paste</button>
+    </div>
+</body>
+</html>

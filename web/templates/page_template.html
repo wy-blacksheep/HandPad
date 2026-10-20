@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+    <script src="/handpad_bridge.js"></script>
+    <title>{{ filename }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='page_style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="{{ url_for('static', filename='page_script.js') }}"></script>
+</head>
+<body>
+    <div class="container">
+        {{ content|safe }}
+    </div>
+
+    <div id="copy-popup" class="popup">
+        <button id="copy-button" class="copy-button">Copy</button>
+    </div>
+</body>
+</html>
